@@ -1,0 +1,79 @@
+# SmartCafe OS — tek VPS'te birden fazla proje calisirken kullanilacak yigin.
+#
+# Uygulama sadece 127.0.0.1'e baglanir; disariya acan tek sey HOST'taki nginx'tir.
+# Her projeye farkli bir APP_PORT ver (bu proje varsayilan 3010).
+#
+#   docker compose up -d --build          -> kur/guncelle (migration'lar otomatik uygulanir)
+#   docker compose --profile tools run --rm tools npm run db:seed     -> ilk kurulumda bir kez
+#   docker compose --profile tools run --rm tools npm run db:durum    -> bakim komutlari
+#   docker compose logs -f app            -> log
+#   docker compose down                   -> durdur (veri kalir)
+
+name: ${COMPOSE_PROJECT_NAME:-smartcafe}
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-smartcafe}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD .env icinde tanimlanmali}
+      POSTGRES_DB: ${POSTGRES_DB:-smartcafe}
+      TZ: ${TZ:-Europe/Istanbul}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-smartcafe} -d ${POSTGRES_DB:-smartcafe}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  app:
+    build:
+      context: .
+      # NEXT_PUBLIC_* degiskenleri derleme aninda gomulur; degistirirsen
+      # "docker compose up -d --build" ile YENIDEN DERLEMEN gerekir.
+      args:
+        NEXT_PUBLIC_APP_TIMEZONE: ${NEXT_PUBLIC_APP_TIMEZONE:-Europe/Istanbul}
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY:-}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-smartcafe}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-smartcafe}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET .env icinde tanimlanmali}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:?NEXTAUTH_URL .env icinde tanimlanmali}
+      NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@smartcafe.local}
+      TZ: ${TZ:-Europe/Istanbul}
+    # SADECE localhost — nginx disinda kimse ulasamaz
+    ports:
+      - "127.0.0.1:${APP_PORT:-3010}:3000"
+
+  # Seed ve bakim komutlari icin. Normalde calismaz (profile ile cagrilir),
+  # cunku tsx gibi gelistirme bagimliliklarina ihtiyac duyuyor.
+  tools:
+    profiles: ["tools"]
+    build:
+      context: .
+      target: builder
+      args:
+        NEXT_PUBLIC_APP_TIMEZONE: ${NEXT_PUBLIC_APP_TIMEZONE:-Europe/Istanbul}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-smartcafe}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-smartcafe}
+      TZ: ${TZ:-Europe/Istanbul}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@smartcafe.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      ADMIN_NAME: ${ADMIN_NAME:-Kafe Sahibi}
+      STAFF_EMAIL: ${STAFF_EMAIL:-barista@smartcafe.local}
+      STAFF_PASSWORD: ${STAFF_PASSWORD:-barista123}
+    command: ["npm", "run", "db:durum"]
+
+volumes:
+  pgdata:

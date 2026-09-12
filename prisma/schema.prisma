@@ -1,0 +1,234 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // Supabase'in "Transaction pooler" adresini kullaniyorsan, migration'lar icin
+  // dogrudan baglantiyi da tanimlayip asagidaki satiri ac:
+  // directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+enum OrderStatus {
+  PENDING
+  PREPARING
+  COMPLETED
+  CANCELLED
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+/// Iptal nedeni. FIRE olanlar zayi sayilir (maliyet olustu), digerleri olusmadi.
+enum CancelReason {
+  MUSTERI_VAZGECTI
+  YANLIS_GIRILDI
+  FIRE
+  STOK_YOK
+  DIGER
+}
+
+model User {
+  id          String   @id @default(uuid())
+  name        String
+  email       String   @unique
+  password    String
+  role        Role     @default(STAFF)
+  phone       String?
+  /// Pasif kullanicilar giris yapamaz (isten ayrilan personel silinmeden kapatilir)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  ordersTaken Order[]  @relation("OrderTakenBy")
+  ordersCancelled Order[] @relation("OrderCancelledBy")
+  itemsCancelled  OrderItem[] @relation("ItemCancelledBy")
+}
+
+model Category {
+  id        String    @id @default(uuid())
+  name      String
+  sortOrder Int       @default(0)
+  products  Product[]
+}
+
+model Product {
+  id          String          @id @default(uuid())
+  name        String
+  description String?
+  price       Float // Baz fiyat
+  imageUrl    String?
+  categoryId  String
+  category    Category        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  isAvailable Boolean         @default(true)
+  sortOrder   Int             @default(0)
+  createdAt   DateTime        @default(now())
+  options     ProductOption[]
+  orderItems  OrderItem[]
+}
+
+/// Ornek: "Boyut", "Sut Tipi"
+model ProductOption {
+  id         String                @id @default(uuid())
+  productId  String
+  product    Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name       String
+  isRequired Boolean               @default(false)
+  isMultiple Boolean               @default(false)
+  sortOrder  Int                   @default(0)
+  choices    ProductOptionChoice[]
+}
+
+/// Ornek: "Buyuk (+15 TL)", "Yulaf Sutu (+20 TL)"
+model ProductOptionChoice {
+  id         String        @id @default(uuid())
+  optionId   String
+  option     ProductOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  name       String
+  extraPrice Float         @default(0)
+  sortOrder  Int           @default(0)
+}
+
+model Order {
+  id          String       @id @default(uuid())
+  orderNo     Int          @default(autoincrement())
+  tableNo     String
+  status      OrderStatus  @default(PENDING)
+  totalAmount Float
+  notes       String?
+  /// Hesap kapatildiginda doldurulur; null ise masa hesabi hala acik
+  paidAt      DateTime?
+  /// "Nakit" | "Kart" | "Diger"
+  paymentMethod String?
+  /// "QR" (musteri kendi verdi) | "PERSONEL" (garson girdi)
+  source      String       @default("QR")
+  takenById   String?
+  takenBy     User?        @relation("OrderTakenBy", fields: [takenById], references: [id], onDelete: SetNull)
+  /// --- Iptal izi ---
+  cancelledAt   DateTime?
+  cancelledById String?
+  cancelledBy   User?         @relation("OrderCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancelReason  CancelReason?
+  cancelNote    String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  orderItems  OrderItem[]
+  transaction Transaction?
+
+  @@index([status, createdAt])
+  @@index([tableNo, paidAt])
+}
+
+model OrderItem {
+  id              String            @id @default(uuid())
+  orderId         String
+  productId       String
+  productName     String // Gecmisi korumak icin anlik kopya
+  quantity        Int               @default(1)
+  basePrice       Float
+  totalPrice      Float // (basePrice + secilen opsiyonlarin ek ucretleri) * adet
+  note            String?
+  order           Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product         Product           @relation(fields: [productId], references: [id])
+  selectedOptions OrderItemOption[]
+  /// --- Kalem bazinda iptal (satir silinmez, iptal isaretlenir) ---
+  cancelledAt   DateTime?
+  cancelledById String?
+  cancelledBy   User?         @relation("ItemCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancelReason  CancelReason?
+  cancelNote    String?
+
+  @@index([orderId, cancelledAt])
+}
+
+/// Musterinin bir urun icin yaptigi secimlerin anlik kaydi
+model OrderItemOption {
+  id          String    @id @default(uuid())
+  orderItemId String
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  optionName  String
+  choiceName  String
+  extraPrice  Float
+}
+
+model Transaction {
+  id          String          @id @default(uuid())
+  type        TransactionType
+  amount      Float
+  description String
+  category    String?
+  /// Fatura / irsaliye numarasi
+  documentNo  String?
+  orderId     String?         @unique
+  order       Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  /// Gider bir tedarikciye baglanabilir (cari hesap)
+  supplierId  String?
+  supplier    Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  /// Bu kalemden simdiye kadar odenen tutar (kismi odeme destekli)
+  paidAmount  Float           @default(0)
+  /// Vade tarihi (veresiye alimlar icin)
+  dueDate     DateTime?
+  /// Tamami odendiginde doldurulur
+  settledAt   DateTime?
+  date        DateTime        @default(now())
+  createdAt   DateTime        @default(now())
+  payments    SupplierPayment[]
+
+  @@index([type, date])
+  @@index([supplierId, settledAt])
+}
+
+/// Toptanci / tedarikci karti
+model Supplier {
+  id           String            @id @default(uuid())
+  name         String
+  contactName  String?
+  phone        String?
+  notes        String?
+  isActive     Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+  transactions Transaction[]
+  payments     SupplierPayment[]
+}
+
+/// Bir gider kalemine yapilan odeme hareketi (cari hesap ekstresi icin)
+model SupplierPayment {
+  id            String      @id @default(uuid())
+  supplierId    String
+  supplier      Supplier    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  amount        Float
+  method        String?
+  note          String?
+  date          DateTime    @default(now())
+  createdAt     DateTime    @default(now())
+
+  @@index([supplierId, date])
+}
+
+/// Yoneticinin tanimladigi gider kalemleri (Hammadde, Kira, ...)
+model ExpenseCategory {
+  id        String @id @default(uuid())
+  name      String @unique
+  sortOrder Int    @default(0)
+}
+
+/// Personel/yonetici cihazlarinin push bildirim abonelikleri
+model PushSubscription {
+  id        String   @id @default(uuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userId    String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
