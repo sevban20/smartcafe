@@ -5,7 +5,13 @@ import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
 import type { Role } from "@prisma/client";
 
-if (process.env.NODE_ENV === "production" && !process.env.NEXTAUTH_SECRET) {
+// Uretimde NEXTAUTH_SECRET yoksa sessizce bozulmak yerine acikca patla.
+// DIKKAT: `next build` sayfa verilerini toplarken bu modulu NODE_ENV=production
+// ile yukler ama ortamda secret bulunmaz (ve bulunmamali — imaj katmanina sizar).
+// Bu yuzden derleme asamasi haric tutuluyor; calisma anindaki kontrol gecerli.
+const derlemeAsamasi = process.env.NEXT_PHASE === "phase-production-build";
+
+if (!derlemeAsamasi && process.env.NODE_ENV === "production" && !process.env.NEXTAUTH_SECRET) {
   throw new Error(
     "NEXTAUTH_SECRET tanimli degil. Uretimde bu olmadan oturumlar dogrulanamaz. " +
       "Uretmek icin: openssl rand -base64 32"
