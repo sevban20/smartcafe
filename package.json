@@ -18,7 +18,8 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:baseline": "node scripts/baseline.mjs",
-    "check:giris": "tsx prisma/giris-kontrol.ts"
+    "check:giris": "tsx prisma/giris-kontrol.ts",
+    "db:sifre": "tsx prisma/sifre-sifirla.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
