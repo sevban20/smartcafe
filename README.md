@@ -131,6 +131,21 @@ ekranındaki liste boşalır — masaya oturan bir sonraki müşteri önceki hes
 geçmişi silmez: `/yonetim/siparisler` tüm siparişleri "Ödendi · Nakit" rozetiyle
 saklamaya devam eder.
 
+**Masa aktarma.** Müşteri başka masaya geçtiğinde (güneş geldi, kalabalık oldu)
+adisyon yeniden girilmez: `/hesaplar` ekranında masanın "Aktar" düğmesi açık
+siparişlerin `tableNo` alanını hedef masaya taşır (`POST /api/hesaplar/aktar`).
+Ödenmiş veya iptal edilmiş siparişlere dokunulmaz — geçmiş olduğu gibi kalır.
+Varsayılan olarak masadaki tüm açık siparişler taşınır; masa bölündüyse yalnızca
+gidenlerin siparişleri seçilebilir (kısmi aktarım), kalanlar eski masada açık kalır.
+Hedef masada zaten açık bir hesap varsa iki adisyon **birleşir**; geri alınamadığı
+için sunucu önce 409 + `needsMerge` döner ve işlem ancak açık onayla tamamlanır —
+bu kontrol, arada hedef masaya sipariş düşme ihtimaline karşı yazma işleminin
+içinde bir kez daha yapılır. Aktarım sonrası: KDS kartı yeni masayı ve "Masa 1 → 3
+aktarıldı" izini gösterir, eski masanın müşteri ekranı boşalır (yeni masanın QR'ı
+okutulmalı), zaten oluşmuş gelir kayıtlarının açıklaması da yeni masaya güncellenir.
+Her aktarım `TableTransfer` tablosuna kim/ne zaman/ne kadar olarak yazılır ve
+`/yonetim/hesaplar` altında "Son masa aktarımları" listesinde görünür.
+
 **Garson siparişi.** QR kullanmak istemeyen müşteriler için personel `/siparis`
 ekranından masa adına sipariş girer: masa numarasını seçer, aynı menüyü ve aynı
 seçenek ekranını kullanır. Sunucu, isteği yapanın oturumu olup olmadığına bakarak
@@ -293,7 +308,11 @@ docker compose --profile tools run --rm tools npm run db:seed   # ilk kurulumda 
 docker compose logs -f app
 ```
 
-Güncelleme: `git pull && docker compose up -d --build` — yeni migration'lar açılışta uygulanır.
+Güncelleme: `git pull && docker compose up -d --build` — şema değişiklikleri
+açılışta otomatik uygulanır. Konteyner açılırken `prisma/migrations` klasörü varsa
+`migrate deploy`, yoksa (bu projenin varsayılan düzeni) `prisma db push` çalışır.
+`db push` veri kaybına yol açacak bir değişiklikte durur ve konteyner açılmaz —
+yani şema sessizce bozulmaz, logda görürsün.
 
 Bakım komutları aynı şekilde:
 

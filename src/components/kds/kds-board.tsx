@@ -25,6 +25,7 @@ type KdsOrder = {
   totalAmount: number;
   notes: string | null;
   source: string;
+  movedFromTable: string | null;
   takenBy: { name: string } | null;
   cancelledBy: { name: string } | null;
   cancelReason: CancelReason | null;
@@ -206,6 +207,11 @@ export function KdsBoard({
                   <p className="text-xs text-muted-foreground">
                     #{order.orderNo} · {formatTime(order.createdAt)} · {timeAgo(order.createdAt)}
                   </p>
+                  {order.movedFromTable && (
+                    <p className="text-xs font-medium text-indigo-700">
+                      Masa {order.movedFromTable} → {order.tableNo} aktarıldı
+                    </p>
+                  )}
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {order.source === "PERSONEL" && (

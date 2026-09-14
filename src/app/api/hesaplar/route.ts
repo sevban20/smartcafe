@@ -14,6 +14,7 @@ type OpenOrder = {
   status: OrderStatus;
   totalAmount: number;
   createdAt: Date;
+  movedFromTable: string | null;
   orderItems: { id: string; productName: string; quantity: number; totalPrice: number }[];
 };
 

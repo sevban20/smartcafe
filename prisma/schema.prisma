@@ -49,6 +49,8 @@ model User {
   ordersTaken Order[]  @relation("OrderTakenBy")
   ordersCancelled Order[] @relation("OrderCancelledBy")
   itemsCancelled  OrderItem[] @relation("ItemCancelledBy")
+  ordersMoved     Order[] @relation("OrderMovedBy")
+  tableTransfers  TableTransfer[]
 }
 
 model Category {
@@ -116,6 +118,12 @@ model Order {
   cancelledBy   User?         @relation("OrderCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
   cancelReason  CancelReason?
   cancelNote    String?
+  /// --- Masa aktarim izi (musteri baska masaya gecti) ---
+  /// Siparisin bu masaya gelmeden onceki masasi; hic tasinmadiysa null
+  movedFromTable String?
+  movedAt        DateTime?
+  movedById      String?
+  movedBy        User?     @relation("OrderMovedBy", fields: [movedById], references: [id], onDelete: SetNull)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   orderItems  OrderItem[]
@@ -218,6 +226,27 @@ model ExpenseCategory {
   id        String @id @default(uuid())
   name      String @unique
   sortOrder Int    @default(0)
+}
+
+/// Bir masanin adisyonunun baska masaya tasinma kaydi (denetim izi).
+/// Silinmez; yonetici "kim, ne zaman, hangi masayi tasidi" sorusunu buradan gorur.
+model TableTransfer {
+  id         String   @id @default(uuid())
+  fromTable  String
+  toTable    String
+  /// Tasinan siparis sayisi ve toplam tutar (o anki fotograf)
+  orderCount Int
+  amount     Float
+  /// Hedef masada zaten acik hesap vardi, birlestirildi
+  merged     Boolean  @default(false)
+  /// Kaynak masada acik siparis kaldi mi (kismi aktarim)
+  partial    Boolean  @default(false)
+  note       String?
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 /// Personel/yonetici cihazlarinin push bildirim abonelikleri

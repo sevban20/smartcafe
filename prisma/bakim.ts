@@ -8,16 +8,11 @@
  *   npm run db:temizle -- --tedarikciler      -> tedarikci kartlarini siler
  *   npm run db:temizle -- --tumu              -> yukaridakilerin hepsi
  *   ... sonuna --numara-sifirla eklersen siparis numarasi 1'den baslar
- *   npm run db:sifre -- eposta@ornek.com yeniSifre123  -> o kullanicinin sifresini sifirlar
- *                                                          (uygulamada "sifremi unuttum" akisi yok;
- *                                                          admin dahil herkesin sifresi kilitlenirse
- *                                                          VPS'e girip bu komut calistirilir)
  *
  * Silme islemleri --onayla olmadan CALISMAZ, sadece ne silinecegini gosterir.
  * Kullanicilar, menu ve gider kalemleri ASLA silinmez.
  */
 import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 const args = process.argv.slice(2);
@@ -123,16 +118,18 @@ async function temizle() {
     return;
   }
 
-  const [orders, autoIncome, manualTx, suppliers, payments] = await Promise.all([
+  const [orders, autoIncome, manualTx, suppliers, payments, transfers] = await Promise.all([
     prisma.order.count(),
     prisma.transaction.count({ where: { orderId: { not: null } } }),
     prisma.transaction.count({ where: { orderId: null } }),
     prisma.supplier.count(),
     prisma.supplierPayment.count(),
+    prisma.tableTransfer.count(),
   ]);
 
   console.log("\n=== SILINECEKLER ===");
-  if (silSiparis) console.log(`Siparis: ${orders} (+ ${autoIncome} otomatik gelir kaydi)`);
+  if (silSiparis)
+    console.log(`Siparis: ${orders} (+ ${autoIncome} otomatik gelir kaydi, ${transfers} masa aktarim kaydi)`);
   if (silFinans) console.log(`Elle girilen gelir/gider: ${manualTx} (+ ${payments} tedarikci odemesi)`);
   if (silTedarikci) console.log(`Tedarikci karti: ${suppliers}`);
   if (numaraSifirla) console.log("Siparis numarasi 1'e sifirlanacak");
@@ -154,7 +151,11 @@ async function temizle() {
   if (silSiparis) {
     const r1 = await prisma.transaction.deleteMany({ where: { orderId: { not: null } } });
     const r2 = await prisma.order.deleteMany({});
-    console.log(`${r2.count} siparis ve ${r1.count} otomatik gelir kaydi silindi.`);
+    // Aktarim kayitlari silinen siparislere atifta bulunuyor, birlikte temizlenir
+    const r3 = await prisma.tableTransfer.deleteMany({});
+    console.log(
+      `${r2.count} siparis, ${r1.count} otomatik gelir kaydi ve ${r3.count} masa aktarim kaydi silindi.`
+    );
   }
   if (silTedarikci) {
     const r = await prisma.supplier.deleteMany({});
@@ -168,42 +169,14 @@ async function temizle() {
   console.log("\nTemizlik tamam.");
 }
 
-async function sifre() {
-  const email = args[1]?.toLowerCase().trim();
-  const yeniSifre = args[2];
-
-  if (!email || !yeniSifre) {
-    console.log("Kullanim: npm run db:sifre -- eposta@ornek.com yeniSifre123");
-    return;
-  }
-  if (yeniSifre.length < 6) {
-    console.log("Sifre en az 6 karakter olmali.");
-    return;
-  }
-
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
-    console.log(`"${email}" ile bir kullanici bulunamadi.`);
-    return;
-  }
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { password: await bcrypt.hash(yeniSifre, 10) },
-  });
-  console.log(`${user.name} (${email}) icin sifre guncellendi.`);
-}
-
 async function main() {
   const komut = args[0];
   if (komut === "durum") await durum();
   else if (komut === "onar") await onar();
   else if (komut === "temizle") await temizle();
-  else if (komut === "sifre") await sifre();
   else {
-    console.log("Kullanim: durum | onar | temizle | sifre");
+    console.log("Kullanim: durum | onar | temizle");
     console.log("Ornek: npm run db:temizle -- --siparisler --onayla --numara-sifirla");
-    console.log("Ornek: npm run db:sifre -- eposta@ornek.com yeniSifre123");
   }
 }
 
