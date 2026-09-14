@@ -308,11 +308,27 @@ docker compose --profile tools run --rm tools npm run db:seed   # ilk kurulumda 
 docker compose logs -f app
 ```
 
-Güncelleme: `git pull && docker compose up -d --build` — şema değişiklikleri
-açılışta otomatik uygulanır. Konteyner açılırken `prisma/migrations` klasörü varsa
-`migrate deploy`, yoksa (bu projenin varsayılan düzeni) `prisma db push` çalışır.
-`db push` veri kaybına yol açacak bir değişiklikte durur ve konteyner açılmaz —
-yani şema sessizce bozulmaz, logda görürsün.
+Güncelleme: `git pull && docker compose up -d --build`.
+
+**Şema değiştirdiysen migration üretmeyi unutma.** Bu depo migration düzeninde
+(`prisma/migrations` klasörü var), yani konteyner açılışta yalnızca `migrate deploy`
+çalıştırır: dosyası olmayan bir şema değişikliği veritabanına **gitmez**, uygulama
+açılır ama her istekte `P2022 / The column ... does not exist` hatası verir. Doğru sıra:
+
+```bash
+# yerelde, şemayı değiştirdikten sonra
+npm run db:migrate -- --name masa_aktarimi   # prisma/migrations altına SQL üretir
+git add prisma/migrations && git commit && git push
+# sunucuda
+git pull && docker compose up -d --build
+```
+
+Konteyner açılışta şemayı veritabanıyla karşılaştırır; bir fark bulursa logda
+`UYARI: VERITABANI SEMAYLA UYUSMUYOR` bloğunu ve eksik olanları yazar. Sunucu yine de
+başlar, ama bu uyarıyı görürsen eksik migration'ı üretmen gerekir.
+
+(`prisma/migrations` klasörü hiç yoksa açılışta `prisma db push` çalışır; veri kaybına
+yol açacak bir değişiklikte durur ve konteyner açılmaz.)
 
 Bakım komutları aynı şekilde:
 

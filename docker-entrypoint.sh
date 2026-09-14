@@ -25,5 +25,28 @@ else
   node node_modules/prisma/build/index.js db push --skip-generate
 fi
 
+# Sema ile veritabani gercekten ortusuyor mu? (Migration uretmeyi unutmak,
+# uygulamanin acilip her istekte P2022/P2021 hatasi vermesine yol aciyordu.)
+# Uyari veriyoruz ama sunucuyu baslatiyoruz — karar operatorde kalsin.
+if node node_modules/prisma/build/index.js migrate diff \
+     --from-url "$DATABASE_URL" \
+     --to-schema-datamodel prisma/schema.prisma \
+     --exit-code >/tmp/sema-fark.txt 2>&1; then
+  echo "[smartcafe] Sema ile veritabani uyumlu."
+else
+  durum=$?
+  if [ "$durum" = "2" ]; then
+    echo "[smartcafe] ============================================================"
+    echo "[smartcafe] UYARI: VERITABANI SEMAYLA UYUSMUYOR."
+    echo "[smartcafe] Muhtemelen sema degistirildi ama migration uretilmedi."
+    echo "[smartcafe] Yerelde: npm run db:migrate -- --name aciklama  (sonra commit+push)"
+    echo "[smartcafe] Eksik olanlar:"
+    sed 's/^/[smartcafe]   /' /tmp/sema-fark.txt
+    echo "[smartcafe] ============================================================"
+  else
+    echo "[smartcafe] Bilgi: sema karsilastirmasi yapilamadi (cikis kodu $durum), atlaniyor."
+  fi
+fi
+
 echo "[smartcafe] Sunucu baslatiliyor (port ${PORT})..."
 exec "$@"
