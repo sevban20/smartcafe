@@ -7,10 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-/** Yuklenen gorsel bu genislige kadar kucultulur (kalite/boyut dengesi) */
-const MAX_WIDTH = 800;
-/** Veritabanina gomulecek data URL icin ust sinir (~350 KB) */
-const MAX_DATA_URL_BYTES = 350_000;
+/**
+ * Yuklenen gorselin UZUN kenari bu degere kadar kucultulur. Urun detayinda
+ * fotograf telefon genisliginde gosterildigi icin (retina ekranlarda ~1100 px)
+ * 800 px yetmiyor, gorsel bulaniklasiyordu.
+ */
+const MAX_EDGE = 1200;
+/** Veritabanina gomulecek data URL icin ust sinir (~450 KB) */
+const MAX_DATA_URL_BYTES = 450_000;
 
 /**
  * Secilen dosyayi canvas ile kucultup JPEG data URL'e cevirir.
@@ -18,7 +22,7 @@ const MAX_DATA_URL_BYTES = 350_000;
  */
 async function fileToCompressedDataUrl(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, MAX_WIDTH / bitmap.width);
+  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
   const width = Math.round(bitmap.width * scale);
   const height = Math.round(bitmap.height * scale);
 
@@ -27,11 +31,27 @@ async function fileToCompressedDataUrl(file: File): Promise<string> {
   canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Görsel işlenemedi.");
+  // PNG seffafligi JPEG'de siyaha donmesin
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.drawImage(bitmap, 0, 0, width, height);
   bitmap.close?.();
 
-  for (const quality of [0.82, 0.7, 0.6, 0.5, 0.4]) {
+  for (const quality of [0.86, 0.8, 0.72, 0.65]) {
     const dataUrl = canvas.toDataURL("image/jpeg", quality);
+    if (dataUrl.length <= MAX_DATA_URL_BYTES) return dataUrl;
+  }
+  // Kaliteyi daha fazla dusurup fotografi bozmak yerine boyutu kucult
+  const half = document.createElement("canvas");
+  half.width = Math.round(width * 0.75);
+  half.height = Math.round(height * 0.75);
+  const hctx = half.getContext("2d");
+  if (hctx) {
+    hctx.imageSmoothingQuality = "high";
+    hctx.drawImage(canvas, 0, 0, half.width, half.height);
+    const dataUrl = half.toDataURL("image/jpeg", 0.8);
     if (dataUrl.length <= MAX_DATA_URL_BYTES) return dataUrl;
   }
   throw new Error("Görsel çok büyük. Daha küçük bir dosya deneyin.");

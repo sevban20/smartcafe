@@ -31,6 +31,7 @@ export default async function SiparislerPage({ searchParams }: { searchParams: {
     include: {
       orderItems: { include: { selectedOptions: true } },
       cancelledBy: { select: { name: true } },
+      customer: { select: { id: true, name: true } },
     },
   });
 
@@ -76,11 +77,17 @@ export default async function SiparislerPage({ searchParams }: { searchParams: {
                       Garson
                     </Badge>
                   )}
-                  {order.paidAt && (
+                  {order.paidAt && order.customer ? (
+                    <a href={`/yonetim/cari/${order.customer.id}`}>
+                      <Badge variant="outline" className="border-violet-200 bg-violet-100 text-violet-800">
+                        Cariye yazıldı · {order.customer.name}
+                      </Badge>
+                    </a>
+                  ) : order.paidAt ? (
                     <Badge variant="outline" className="border-emerald-200 bg-emerald-100 text-emerald-800">
                       Ödendi{order.paymentMethod ? ` · ${order.paymentMethod}` : ""}
                     </Badge>
-                  )}
+                  ) : null}
                   <Badge variant="outline" className={ORDER_STATUS_CLASS[order.status]}>
                     {ORDER_STATUS_LABEL[order.status]}
                   </Badge>

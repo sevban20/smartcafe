@@ -107,112 +107,135 @@ export function ProductDrawer({ product, open, onOpenChange }: Props) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent>
-        <DrawerHeader>
+        {/* Gorsel + baslik + secenekler tek kaydirilabilir alanda: uzun secenek
+            listelerinde fotograf ekrani yiyip secenekleri sikistirmasin */}
+        <div className="flex-1 overflow-y-auto">
           {product.imageUrl && (
-            <div className="mb-2 h-40 w-full overflow-hidden rounded-xl bg-muted">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+            <div className="px-4 pt-3">
+              {/* Fotograf hic kirpilmadan (object-contain) gosterilir; kenarlarda kalan
+                  bosluk ayni fotografin bulanik kopyasiyla doldurulur. Eskiden tam
+                  genislik x 160px object-cover idi: kare/dikey fotograflar ince bir
+                  serit halinde kirpilip asiri buyutuluyordu. */}
+              <div className="relative aspect-[4/3] max-h-[45vh] w-full overflow-hidden rounded-xl bg-muted">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={product.imageUrl}
+                  alt=""
+                  aria-hidden
+                  className="absolute inset-0 h-full w-full scale-110 object-cover opacity-60 blur-2xl"
+                />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={product.imageUrl}
+                  alt={product.name}
+                  decoding="async"
+                  className="relative h-full w-full object-contain"
+                />
+              </div>
             </div>
           )}
-          <DrawerTitle>{product.name}</DrawerTitle>
-          {product.description ? <DrawerDescription>{product.description}</DrawerDescription> : null}
-          <p className="pt-1 text-sm font-medium text-muted-foreground">
-            Başlangıç fiyatı {formatPrice(product.price)}
-          </p>
-        </DrawerHeader>
 
-        <div className="flex-1 space-y-5 overflow-y-auto px-4 pb-4">
-          {product.options.map((option) => (
-            <div key={option.id} className="space-y-2.5">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-semibold">{option.name}</h3>
-                {option.isRequired ? (
-                  <Badge variant="secondary" className="text-[10px]">
-                    Zorunlu
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-[10px]">
-                    İsteğe bağlı
-                  </Badge>
-                )}
+          <DrawerHeader>
+            <DrawerTitle>{product.name}</DrawerTitle>
+            {product.description ? <DrawerDescription>{product.description}</DrawerDescription> : null}
+            <p className="pt-1 text-sm font-medium text-muted-foreground">
+              Başlangıç fiyatı {formatPrice(product.price)}
+            </p>
+          </DrawerHeader>
+
+          <div className="space-y-5 px-4 pb-4">
+            {product.options.map((option) => (
+              <div key={option.id} className="space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold">{option.name}</h3>
+                  {option.isRequired ? (
+                    <Badge variant="secondary" className="text-[10px]">
+                      Zorunlu
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px]">
+                      İsteğe bağlı
+                    </Badge>
+                  )}
+                  {option.isMultiple ? (
+                    <span className="text-[11px] text-muted-foreground">Birden fazla seçilebilir</span>
+                  ) : null}
+                </div>
+
                 {option.isMultiple ? (
-                  <span className="text-[11px] text-muted-foreground">Birden fazla seçilebilir</span>
-                ) : null}
-              </div>
-
-              {option.isMultiple ? (
-                <div className="space-y-1">
-                  {option.choices.map((choice) => {
-                    const checked = (selection[option.id] ?? []).includes(choice.id);
-                    return (
+                  <div className="space-y-1">
+                    {option.choices.map((choice) => {
+                      const checked = (selection[option.id] ?? []).includes(choice.id);
+                      return (
+                        <label
+                          key={choice.id}
+                          className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-3 has-[:checked]:border-primary has-[:checked]:bg-accent/40"
+                        >
+                          <span className="flex items-center gap-3">
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(v) => toggleMultiple(option.id, choice.id, v === true)}
+                            />
+                            <span className="text-sm">{choice.name}</span>
+                          </span>
+                          <span className="text-sm text-muted-foreground">
+                            {choice.extraPrice > 0 ? `+${formatPrice(choice.extraPrice)}` : "Ücretsiz"}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <RadioGroup
+                    value={(selection[option.id] ?? [])[0] ?? ""}
+                    onValueChange={(v) => toggleSingle(option.id, v)}
+                    className="space-y-1"
+                  >
+                    {option.choices.map((choice) => (
                       <label
                         key={choice.id}
-                        className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-3 has-[:checked]:border-primary has-[:checked]:bg-accent/40"
+                        className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-3 has-[:checked]:border-primary has-[[data-state=checked]]:border-primary"
                       >
                         <span className="flex items-center gap-3">
-                          <Checkbox
-                            checked={checked}
-                            onCheckedChange={(v) => toggleMultiple(option.id, choice.id, v === true)}
-                          />
-                          <span className="text-sm">{choice.name}</span>
+                          <RadioGroupItem value={choice.id} id={choice.id} />
+                          <Label htmlFor={choice.id} className="cursor-pointer text-sm font-normal">
+                            {choice.name}
+                          </Label>
                         </span>
                         <span className="text-sm text-muted-foreground">
                           {choice.extraPrice > 0 ? `+${formatPrice(choice.extraPrice)}` : "Ücretsiz"}
                         </span>
                       </label>
-                    );
-                  })}
-                </div>
-              ) : (
-                <RadioGroup
-                  value={(selection[option.id] ?? [])[0] ?? ""}
-                  onValueChange={(v) => toggleSingle(option.id, v)}
-                  className="space-y-1"
-                >
-                  {option.choices.map((choice) => (
-                    <label
-                      key={choice.id}
-                      className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-3 has-[:checked]:border-primary has-[[data-state=checked]]:border-primary"
-                    >
-                      <span className="flex items-center gap-3">
-                        <RadioGroupItem value={choice.id} id={choice.id} />
-                        <Label htmlFor={choice.id} className="cursor-pointer text-sm font-normal">
-                          {choice.name}
-                        </Label>
-                      </span>
-                      <span className="text-sm text-muted-foreground">
-                        {choice.extraPrice > 0 ? `+${formatPrice(choice.extraPrice)}` : "Ücretsiz"}
-                      </span>
-                    </label>
-                  ))}
-                </RadioGroup>
-              )}
-              <Separator />
-            </div>
-          ))}
+                    ))}
+                  </RadioGroup>
+                )}
+                <Separator />
+              </div>
+            ))}
 
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Adet</span>
-            <div className="flex items-center gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                aria-label="Azalt"
-              >
-                <Minus className="h-4 w-4" />
-              </Button>
-              <span className="w-8 text-center text-lg font-semibold tabular-nums">{quantity}</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => setQuantity((q) => Math.min(50, q + 1))}
-                aria-label="Artır"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Adet</span>
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  aria-label="Azalt"
+                >
+                  <Minus className="h-4 w-4" />
+                </Button>
+                <span className="w-8 text-center text-lg font-semibold tabular-nums">{quantity}</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setQuantity((q) => Math.min(50, q + 1))}
+                  aria-label="Artır"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
         </div>

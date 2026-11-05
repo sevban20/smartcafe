@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, ArrowLeftRight, Loader2, RefreshCw, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowLeftRight, BookUser, Loader2, RefreshCw, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatPrice, formatTime, timeAgo } from "@/lib/utils";
 import { PAYMENT_METHODS, type PaymentMethod } from "@/lib/constants";
+import { CariPicker } from "@/components/kds/cari-picker";
 import { toast } from "sonner";
 
 type OpenTable = {
@@ -42,6 +43,8 @@ type OpenTable = {
 export function OpenTables({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
   const [active, setActive] = React.useState<OpenTable | null>(null);
+  /** Hesap dialogunda "Cariye Yaz" bolumu acik mi */
+  const [cariOpen, setCariOpen] = React.useState(false);
 
   // --- Masa aktarimi ---
   // Masanin kendisini degil numarasini tutuyoruz: dialog acikken liste
@@ -77,22 +80,39 @@ export function OpenTables({ embedded = false }: { embedded?: boolean }) {
   });
 
   const close = useMutation({
-    mutationFn: async ({ tableNo, paymentMethod }: { tableNo: string; paymentMethod: PaymentMethod }) => {
+    mutationFn: async ({
+      tableNo,
+      paymentMethod,
+      customerId,
+    }: {
+      tableNo: string;
+      paymentMethod: PaymentMethod | "Cari";
+      customerId?: string;
+    }) => {
       const res = await fetch("/api/hesaplar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tableNo, paymentMethod }),
+        body: JSON.stringify({ tableNo, paymentMethod, customerId }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error ?? "Hesap kapatılamadı");
-      return json as { closed: number; completed: number; total: number; paymentMethod: string };
+      return json as {
+        closed: number;
+        completed: number;
+        total: number;
+        paymentMethod: string;
+        customerName: string | null;
+      };
     },
     onSuccess: (result, vars) => {
       queryClient.invalidateQueries({ queryKey: ["hesaplar"] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["cari-musteriler"] });
       setActive(null);
+      setCariOpen(false);
       toast.success(
-        `Masa ${vars.tableNo} kapatıldı · ${formatPrice(result.total)} · ${result.paymentMethod}` +
+        `Masa ${vars.tableNo} kapatıldı · ${formatPrice(result.total)} · ` +
+          (result.customerName ? `${result.customerName} carisine yazıldı` : result.paymentMethod) +
           (result.completed > 0 ? ` · ${result.completed} sipariş tamamlandı sayıldı` : "")
       );
     },
@@ -263,7 +283,15 @@ export function OpenTables({ embedded = false }: { embedded?: boolean }) {
         )}
       </div>
 
-      <Dialog open={active !== null} onOpenChange={(v) => !v && setActive(null)}>
+      <Dialog
+        open={active !== null}
+        onOpenChange={(v) => {
+          if (!v) {
+            setActive(null);
+            setCariOpen(false);
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Masa {active?.tableNo} · Hesap</DialogTitle>
@@ -320,6 +348,28 @@ export function OpenTables({ embedded = false }: { embedded?: boolean }) {
                   </Button>
                 ))}
               </div>
+
+              {/* Veresiye: borcu duzenli musterinin cari hesabina yaz */}
+              {cariOpen ? (
+                <CariPicker
+                  key={active.tableNo}
+                  total={active.total}
+                  pending={close.isPending}
+                  onConfirm={(customerId) =>
+                    close.mutate({ tableNo: active.tableNo, paymentMethod: "Cari", customerId })
+                  }
+                />
+              ) : (
+                <Button
+                  variant="outline"
+                  className="w-full border-dashed"
+                  disabled={close.isPending}
+                  onClick={() => setCariOpen(true)}
+                >
+                  <BookUser className="h-4 w-4" />
+                  Cariye Yaz (sonra ödeyecek)
+                </Button>
+              )}
             </div>
           )}
         </DialogContent>

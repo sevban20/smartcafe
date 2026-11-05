@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
   BarChart3,
+  BookUser,
   Coffee,
   LayoutDashboard,
   LogOut,
@@ -38,6 +39,7 @@ const PRIMARY = [
 
 /** "Diğer" menusundeki ekranlar */
 const SECONDARY = [
+  { href: "/yonetim/cari", label: "Cari Müşteriler", icon: BookUser },
   { href: "/yonetim/iptaller", label: "İptaller", icon: Ban },
   { href: "/yonetim/personel", label: "Personel", icon: Users },
   { href: "/yonetim/qr", label: "QR Kodlar", icon: QrCode },

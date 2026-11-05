@@ -28,6 +28,14 @@ enum TransactionType {
 }
 
 /// Iptal nedeni. FIRE olanlar zayi sayilir (maliyet olustu), digerleri olusmadi.
+/// Cari musteri hesap hareketi turu
+enum CustomerEntryType {
+  /// Musteriden alinan odeme (borcu azaltir)
+  TAHSILAT
+  /// Elle girilen borc: sisteme gecmeden onceki devir vb. (ciroya yazilmaz)
+  BORC
+}
+
 enum CancelReason {
   MUSTERI_VAZGECTI
   YANLIS_GIRILDI
@@ -51,6 +59,7 @@ model User {
   itemsCancelled  OrderItem[] @relation("ItemCancelledBy")
   ordersMoved     Order[] @relation("OrderMovedBy")
   tableTransfers  TableTransfer[]
+  customerEntries CustomerEntry[]
 }
 
 model Category {
@@ -124,6 +133,11 @@ model Order {
   movedAt        DateTime?
   movedById      String?
   movedBy        User?     @relation("OrderMovedBy", fields: [movedById], references: [id], onDelete: SetNull)
+  /// --- Cari (veresiye) ---
+  /// Hesap "Cari" yontemiyle kapatildiysa borcun yazildigi musteri.
+  /// Bu durumda paidAt "hesap kapandi" anlamina gelir, para henuz tahsil edilmedi.
+  customerId     String?
+  customer       Customer? @relation(fields: [customerId], references: [id], onDelete: Restrict)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   orderItems  OrderItem[]
@@ -131,6 +145,7 @@ model Order {
 
   @@index([status, createdAt])
   @@index([tableNo, paidAt])
+  @@index([customerId])
 }
 
 model OrderItem {
@@ -260,4 +275,37 @@ model PushSubscription {
   createdAt DateTime @default(now())
 
   @@index([userId])
+}
+
+/// Veresiye calisan duzenli musteri (cari hesap karti).
+/// Bakiye = cariye yazilan siparisler + elle girilen borclar - tahsilatlar
+model Customer {
+  id          String          @id @default(uuid())
+  name        String
+  phone       String?
+  notes       String?
+  /// Bos ise limitsiz. Doluysa bu tutari asacak bir hesap cariye yazilamaz.
+  creditLimit Float?
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  orders      Order[]
+  entries     CustomerEntry[]
+}
+
+/// Cari musteri hesap hareketi (tahsilat ya da elle borc)
+model CustomerEntry {
+  id         String            @id @default(uuid())
+  customerId String
+  customer   Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  type       CustomerEntryType
+  amount     Float
+  /// Tahsilatta: "Nakit" | "Kart" | "Diger"
+  method     String?
+  note       String?
+  date       DateTime          @default(now())
+  userId     String?
+  user       User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt  DateTime          @default(now())
+
+  @@index([customerId, date])
 }

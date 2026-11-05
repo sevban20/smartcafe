@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { AlertCircle, ArrowRight, Coffee, HandCoins, Receipt, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { AlertCircle, ArrowRight, BookUser, Coffee, HandCoins, Receipt, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { addDays, getDailySeries, getDebtSummary, getSummary, getTopProducts, startOfDay, startOfMonth } from "@/lib/stats";
+import { getReceivableSummary } from "@/lib/cari";
 import { StatCard } from "@/components/admin/stat-card";
 import { FinanceChart } from "@/components/admin/finance-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +21,7 @@ export default async function YonetimOzetPage() {
   const tomorrow = addDays(today, 1);
   const monthStart = startOfMonth();
 
-  const [dayStats, monthStats, series, topProducts, activeOrders, recentOrders, debt] = await Promise.all([
+  const [dayStats, monthStats, series, topProducts, activeOrders, recentOrders, debt, receivable] = await Promise.all([
     getSummary(today, tomorrow),
     getSummary(monthStart, tomorrow),
     getDailySeries(7),
@@ -32,6 +33,7 @@ export default async function YonetimOzetPage() {
       select: { id: true, orderNo: true, tableNo: true, status: true, totalAmount: true, createdAt: true },
     }),
     getDebtSummary(),
+    getReceivableSummary(),
   ]);
 
   return (
@@ -92,6 +94,38 @@ export default async function YonetimOzetPage() {
                     </p>
                   </div>
                   <span className="shrink-0 text-sm font-semibold tabular-nums">{formatPrice(item.remaining)}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {receivable.total > 0 && (
+        <Card>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <CardTitle className="flex items-center gap-2">
+              <BookUser className="h-4 w-4" />
+              Cari müşteri alacağı
+            </CardTitle>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/yonetim/cari">
+                Cari Müşteriler <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold tabular-nums text-violet-700">{formatPrice(receivable.total)}</p>
+            <p className="text-xs text-muted-foreground">
+              {receivable.rows.length} müşteri · satış ciroya yazıldı, tahsil edilmedi
+            </p>
+            <ul className="mt-3 divide-y">
+              {receivable.rows.slice(0, 4).map((r) => (
+                <li key={r.id}>
+                  <Link href={`/yonetim/cari/${r.id}`} className="flex items-center justify-between gap-3 py-2">
+                    <span className="truncate text-sm font-medium">{r.name}</span>
+                    <span className="shrink-0 text-sm font-semibold tabular-nums">{formatPrice(r.balance)}</span>
+                  </Link>
                 </li>
               ))}
             </ul>
