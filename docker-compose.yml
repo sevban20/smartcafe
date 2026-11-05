@@ -49,6 +49,10 @@ services:
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@smartcafe.local}
       TZ: ${TZ:-Europe/Istanbul}
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      # Menu gorselleri, logo ve acilis videosu. Yeniden derlemede silinmez.
+      - uploads:/app/uploads
     # SADECE localhost — nginx disinda kimse ulasamaz
     ports:
       - "127.0.0.1:${APP_PORT:-3010}:3000"
@@ -79,3 +83,4 @@ services:
 
 volumes:
   pgdata:
+  uploads:

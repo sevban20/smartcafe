@@ -63,10 +63,20 @@ model User {
 }
 
 model Category {
-  id        String    @id @default(uuid())
-  name      String
-  sortOrder Int       @default(0)
-  products  Product[]
+  id          String     @id @default(uuid())
+  name        String
+  sortOrder   Int        @default(0)
+  /// Menude kategori kartinin altinda gorunen kisa tanitim
+  description String?
+  /// Kategori karti / basligi gorseli (/uploads/... ya da https://...)
+  imageUrl    String?
+  /// Alt kategori ise bagli oldugu ust kategori. Tek seviye: ust kategorinin ustu olamaz.
+  parentId    String?
+  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children    Category[] @relation("CategoryTree")
+  products    Product[]
+
+  @@index([parentId])
 }
 
 model Product {
@@ -308,4 +318,26 @@ model CustomerEntry {
   createdAt  DateTime          @default(now())
 
   @@index([customerId, date])
+}
+
+/// Musteri menusunun gorunumu. Tek satir (id = "default"); yonetici panelinden duzenlenir.
+model SiteSetting {
+  id              String   @id @default("default")
+  brandName       String   @default("Çamlı Kahve")
+  /// Ornek: "Kahve · Tatli · Kahvalti"
+  tagline         String?
+  logoUrl         String?
+  /// Marka rengi (#RRGGBB): ust bar, dugmeler, sekmeler
+  brandColor      String   @default("#8B5E3C")
+  /// Acilis ekrani arka plani. Video varsa o oynar, gorsel yedek/kapak olur.
+  heroVideoUrl    String?
+  heroImageUrl    String?
+  welcomeText     String?
+  instagramUrl    String?
+  googleReviewUrl String?
+  wifiName        String?
+  wifiPassword    String?
+  phone           String?
+  address         String?
+  updatedAt       DateTime @updatedAt
 }

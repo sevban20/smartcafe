@@ -14,6 +14,11 @@ mkdir -p "$BACKUP_DIR"
 docker compose exec -T db pg_dump -U "${POSTGRES_USER:-smartcafe}" "${POSTGRES_DB:-smartcafe}" \
   | gzip > "$BACKUP_DIR/smartcafe-$STAMP.sql.gz"
 
+# Yuklenen gorseller/videolar (veritabaninda sadece adresleri var)
+docker compose exec -T app tar czf - -C /app uploads > "$BACKUP_DIR/smartcafe-uploads-$STAMP.tar.gz" \
+  || echo "Uyari: uploads yedegi alinamadi"
+
 find "$BACKUP_DIR" -name "smartcafe-*.sql.gz" -mtime "+$KEEP_DAYS" -delete
+find "$BACKUP_DIR" -name "smartcafe-uploads-*.tar.gz" -mtime "+$KEEP_DAYS" -delete
 
 echo "Yedek alindi: $BACKUP_DIR/smartcafe-$STAMP.sql.gz"

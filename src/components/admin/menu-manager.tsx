@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Coffee, FolderPlus, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Coffee, CornerDownRight, FolderPlus, Loader2, Palette, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +17,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ImagePicker } from "@/components/admin/image-picker";
 import { ProductForm, type ProductFormValues } from "@/components/admin/product-form";
 import { deleteCategory, deleteProduct, saveCategory, toggleProductAvailability } from "@/app/yonetim/actions";
 import { formatPrice } from "@/lib/utils";
@@ -25,6 +29,9 @@ export type AdminCategory = {
   id: string;
   name: string;
   sortOrder: number;
+  description: string | null;
+  imageUrl: string | null;
+  parentId: string | null;
   products: {
     id: string;
     name: string;
@@ -42,18 +49,39 @@ export type AdminCategory = {
   }[];
 };
 
+type CategoryDraft = {
+  id?: string;
+  name: string;
+  sortOrder: number;
+  description: string;
+  imageUrl: string;
+  parentId: string;
+};
+
+const emptyCategoryDraft = (sortOrder: number, parentId = "none"): CategoryDraft => ({
+  name: "",
+  sortOrder,
+  description: "",
+  imageUrl: "",
+  parentId,
+});
+
 export function MenuManager({ categories }: { categories: AdminCategory[] }) {
   const router = useRouter();
   const [productOpen, setProductOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<ProductFormValues | null>(null);
   const [categoryOpen, setCategoryOpen] = React.useState(false);
-  const [categoryDraft, setCategoryDraft] = React.useState<{ id?: string; name: string; sortOrder: number }>({
-    name: "",
-    sortOrder: 0,
-  });
+  const [categoryDraft, setCategoryDraft] = React.useState<CategoryDraft>(emptyCategoryDraft(0));
   const [busy, setBusy] = React.useState(false);
 
-  const flatCategories = categories.map((c) => ({ id: c.id, name: c.name }));
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  // Urun formunda alt kategoriler "Kahveler › Sicak Kahveler" olarak gorunur
+  const flatCategories = categories.map((c) => ({
+    id: c.id,
+    name: c.parentId && byId.get(c.parentId) ? `${byId.get(c.parentId)!.name} › ${c.name}` : c.name,
+  }));
+  const topCategories = categories.filter((c) => !c.parentId);
+  const hasChildren = (id: string) => categories.some((c) => c.parentId === id);
 
   const openNewProduct = () => {
     setEditing({
@@ -127,11 +155,17 @@ export function MenuManager({ categories }: { categories: AdminCategory[] }) {
           <h1 className="text-xl font-bold">Menü Yönetimi</h1>
           <p className="text-sm text-muted-foreground">Kategoriler, ürünler ve seçenek grupları</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline">
+            <Link href="/yonetim/menu/gorunum">
+              <Palette className="h-4 w-4" />
+              Görünüm
+            </Link>
+          </Button>
           <Button
             variant="outline"
             onClick={() => {
-              setCategoryDraft({ name: "", sortOrder: categories.length });
+              setCategoryDraft(emptyCategoryDraft(topCategories.length));
               setCategoryOpen(true);
             }}
           >
@@ -153,20 +187,59 @@ export function MenuManager({ categories }: { categories: AdminCategory[] }) {
         </Card>
       ) : (
         categories.map((category) => (
-          <section key={category.id} className="space-y-2">
+          <section
+            key={category.id}
+            className={category.parentId ? "ml-4 space-y-2 border-l-2 border-dashed pl-3 sm:ml-6" : "space-y-2"}
+          >
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-base font-semibold">
-                {category.name}
-                <span className="ml-2 text-xs font-normal text-muted-foreground">
-                  {category.products.length} ürün
-                </span>
-              </h2>
-              <div className="flex gap-1">
+              <div className="flex min-w-0 items-center gap-2.5">
+                {category.parentId && <CornerDownRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                {category.imageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={category.imageUrl} alt="" className="h-9 w-9 shrink-0 rounded-md object-cover" />
+                )}
+                <div className="min-w-0">
+                  <h2 className={category.parentId ? "text-sm font-semibold" : "text-base font-semibold"}>
+                    {category.name}
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      {category.products.length} ürün
+                      {category.parentId ? " · alt kategori" : ""}
+                    </span>
+                  </h2>
+                  {category.description && (
+                    <p className="line-clamp-1 text-xs text-muted-foreground">{category.description}</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                {!category.parentId && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setCategoryDraft(
+                        emptyCategoryDraft(categories.filter((c) => c.parentId === category.id).length, category.id)
+                      );
+                      setCategoryOpen(true);
+                    }}
+                    aria-label="Alt kategori ekle"
+                    title="Alt kategori ekle"
+                  >
+                    <FolderPlus className="h-4 w-4" />
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => {
-                    setCategoryDraft({ id: category.id, name: category.name, sortOrder: category.sortOrder });
+                    setCategoryDraft({
+                      id: category.id,
+                      name: category.name,
+                      sortOrder: category.sortOrder,
+                      description: category.description ?? "",
+                      imageUrl: category.imageUrl ?? "",
+                      parentId: category.parentId ?? "none",
+                    });
                     setCategoryOpen(true);
                   }}
                   aria-label="Kategoriyi düzenle"
@@ -185,7 +258,7 @@ export function MenuManager({ categories }: { categories: AdminCategory[] }) {
             </div>
 
             <div className="space-y-2">
-              {category.products.length === 0 && (
+              {category.products.length === 0 && !hasChildren(category.id) && (
                 <p className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
                   Bu kategoride ürün yok.
                 </p>
@@ -258,10 +331,18 @@ export function MenuManager({ categories }: { categories: AdminCategory[] }) {
       />
 
       <Dialog open={categoryOpen} onOpenChange={setCategoryOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{categoryDraft.id ? "Kategoriyi Düzenle" : "Yeni Kategori"}</DialogTitle>
-            <DialogDescription>Menüdeki başlık gruplarını buradan yönetin.</DialogDescription>
+            <DialogTitle>
+              {categoryDraft.id
+                ? "Kategoriyi Düzenle"
+                : categoryDraft.parentId !== "none"
+                  ? "Yeni Alt Kategori"
+                  : "Yeni Kategori"}
+            </DialogTitle>
+            <DialogDescription>
+              Ana kategoriler menüde kart olarak görünür; alt kategoriler o kartın içinde başlık olur.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
@@ -273,16 +354,64 @@ export function MenuManager({ categories }: { categories: AdminCategory[] }) {
                 placeholder="Örn. Sıcak Kahveler"
               />
             </div>
+            <div className="grid gap-3 sm:grid-cols-[1fr_6rem]">
+              <div className="space-y-1.5">
+                <Label>Üst kategori</Label>
+                <Select
+                  value={categoryDraft.parentId}
+                  onValueChange={(v) => setCategoryDraft((d) => ({ ...d, parentId: v }))}
+                  disabled={!!categoryDraft.id && hasChildren(categoryDraft.id)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Yok (ana kategori)</SelectItem>
+                    {topCategories
+                      .filter((c) => c.id !== categoryDraft.id)
+                      .map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {categoryDraft.id && hasChildren(categoryDraft.id) && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Alt kategorileri olduğu için ana kategori olarak kalmalı.
+                  </p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="kategori-sira">Sıra</Label>
+                <Input
+                  id="kategori-sira"
+                  type="number"
+                  min="0"
+                  value={categoryDraft.sortOrder}
+                  onChange={(e) => setCategoryDraft((d) => ({ ...d, sortOrder: Number(e.target.value) }))}
+                />
+              </div>
+            </div>
             <div className="space-y-1.5">
-              <Label htmlFor="kategori-sira">Sıra</Label>
-              <Input
-                id="kategori-sira"
-                type="number"
-                min="0"
-                value={categoryDraft.sortOrder}
-                onChange={(e) => setCategoryDraft((d) => ({ ...d, sortOrder: Number(e.target.value) }))}
+              <Label htmlFor="kategori-aciklama">Kısa açıklama (isteğe bağlı)</Label>
+              <Textarea
+                id="kategori-aciklama"
+                rows={2}
+                maxLength={200}
+                value={categoryDraft.description}
+                onChange={(e) => setCategoryDraft((d) => ({ ...d, description: e.target.value }))}
+                placeholder="Örn. Özenle seçilmiş çekirdeklerden hazırlanan kahveler"
               />
             </div>
+            <ImagePicker
+              label="Kategori görseli (isteğe bağlı)"
+              value={categoryDraft.imageUrl}
+              onChange={(v) => setCategoryDraft((d) => ({ ...d, imageUrl: v }))}
+              maxEdge={1200}
+              previewClassName="aspect-[3/4] h-auto w-24"
+              hint="Menüdeki kategori kartında görünür. Boş bırakılırsa ilk ürünün fotoğrafı kullanılır."
+            />
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setCategoryOpen(false)}>
                 Vazgeç

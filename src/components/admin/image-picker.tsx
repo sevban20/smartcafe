@@ -5,69 +5,47 @@ import { ImagePlus, Link2, Loader2, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { compressImage, uploadFile } from "@/lib/upload-client";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-
-/**
- * Yuklenen gorselin UZUN kenari bu degere kadar kucultulur. Urun detayinda
- * fotograf telefon genisliginde gosterildigi icin (retina ekranlarda ~1100 px)
- * 800 px yetmiyor, gorsel bulaniklasiyordu.
- */
-const MAX_EDGE = 1200;
-/** Veritabanina gomulecek data URL icin ust sinir (~450 KB) */
-const MAX_DATA_URL_BYTES = 450_000;
-
-/**
- * Secilen dosyayi canvas ile kucultup JPEG data URL'e cevirir.
- * Boyut sinirini asarsa kaliteyi kademeli dusurur.
- */
-async function fileToCompressedDataUrl(file: File): Promise<string> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-  const width = Math.round(bitmap.width * scale);
-  const height = Math.round(bitmap.height * scale);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Görsel işlenemedi.");
-  // PNG seffafligi JPEG'de siyaha donmesin
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, width, height);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(bitmap, 0, 0, width, height);
-  bitmap.close?.();
-
-  for (const quality of [0.86, 0.8, 0.72, 0.65]) {
-    const dataUrl = canvas.toDataURL("image/jpeg", quality);
-    if (dataUrl.length <= MAX_DATA_URL_BYTES) return dataUrl;
-  }
-  // Kaliteyi daha fazla dusurup fotografi bozmak yerine boyutu kucult
-  const half = document.createElement("canvas");
-  half.width = Math.round(width * 0.75);
-  half.height = Math.round(height * 0.75);
-  const hctx = half.getContext("2d");
-  if (hctx) {
-    hctx.imageSmoothingQuality = "high";
-    hctx.drawImage(canvas, 0, 0, half.width, half.height);
-    const dataUrl = half.toDataURL("image/jpeg", 0.8);
-    if (dataUrl.length <= MAX_DATA_URL_BYTES) return dataUrl;
-  }
-  throw new Error("Görsel çok büyük. Daha küçük bir dosya deneyin.");
-}
 
 type Props = {
   value: string;
   onChange: (value: string) => void;
+  label?: string;
+  hint?: string;
+  /**
+   * Uzun kenarin kucultulecegi deger. Urun detayinda fotograf telefon genisliginde
+   * gosterildigi icin (retina ~1100 px) 1600 secildi.
+   */
+  maxEdge?: number;
+  /** Logo gibi seffaf gorseller icin: JPEG'e cevirme */
+  keepAlpha?: boolean;
+  /** Onizleme kutusunun bicimi */
+  previewClassName?: string;
 };
 
-export function ImagePicker({ value, onChange }: Props) {
+/**
+ * Gorsel secici: dosyayi kucultup sunucuya yukler (/uploads/...) ya da dis bir
+ * baglanti kabul eder. Eskiden gorseller veritabanina gomuluyordu (data URL);
+ * bu menunun her acilista megabaytlarca veri indirmesine yol aciyordu.
+ */
+export function ImagePicker({
+  value,
+  onChange,
+  label = "Ürün görseli (isteğe bağlı)",
+  hint,
+  maxEdge = 1600,
+  keepAlpha = false,
+  previewClassName,
+}: Props) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [busy, setBusy] = React.useState(false);
+  const [progress, setProgress] = React.useState(0);
   const [showUrl, setShowUrl] = React.useState(false);
 
-  const isUploaded = value.startsWith("data:");
+  const isUploaded = value.startsWith("/uploads/");
+  const isLegacy = value.startsWith("data:");
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
@@ -76,8 +54,11 @@ export function ImagePicker({ value, onChange }: Props) {
       return;
     }
     setBusy(true);
+    setProgress(0);
     try {
-      onChange(await fileToCompressedDataUrl(file));
+      const blob = await compressImage(file, maxEdge, keepAlpha);
+      const url = await uploadFile(blob, "image", setProgress, file.name);
+      onChange(url);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Görsel yüklenemedi.");
     } finally {
@@ -88,19 +69,29 @@ export function ImagePicker({ value, onChange }: Props) {
 
   return (
     <div className="space-y-2">
-      <Label>Ürün görseli (isteğe bağlı)</Label>
+      <Label>{label}</Label>
 
       <div className="flex items-start gap-3">
-        <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted">
+        <div
+          className={cn(
+            "relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted",
+            previewClassName
+          )}
+        >
           {value ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={value} alt="Ürün görseli önizleme" className="h-full w-full object-cover" />
+            <img
+              src={value}
+              alt="Görsel önizleme"
+              className={cn("h-full w-full", keepAlpha ? "object-contain p-1" : "object-cover")}
+            />
           ) : (
             <ImagePlus className="h-7 w-7 text-muted-foreground" />
           )}
           {busy && (
-            <div className="absolute inset-0 flex items-center justify-center bg-background/70">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-background/75 text-[11px] font-medium">
               <Loader2 className="h-5 w-5 animate-spin" />
+              {progress > 0 && `%${progress}`}
             </div>
           )}
         </div>
@@ -109,7 +100,7 @@ export function ImagePicker({ value, onChange }: Props) {
           <input
             ref={inputRef}
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp"
             className="hidden"
             onChange={(e) => handleFile(e.target.files?.[0])}
           />
@@ -132,15 +123,18 @@ export function ImagePicker({ value, onChange }: Props) {
           </div>
 
           <p className="text-[11px] text-muted-foreground">
-            {isUploaded
-              ? "Yüklenen görsel otomatik küçültüldü ve ürüne gömüldü."
-              : "Telefondan fotoğraf çekip yükleyebilir ya da bir bağlantı yapıştırabilirsin."}
+            {hint ??
+              (isUploaded
+                ? "Görsel yüklendi ve otomatik küçültüldü."
+                : isLegacy
+                  ? "Bu görsel eski yöntemle kayıtlı. Menü Görünümü ekranından toplu olarak taşıyabilirsin."
+                  : "Telefondan fotoğraf çekip yükleyebilir ya da bir bağlantı yapıştırabilirsin.")}
           </p>
 
           {showUrl && (
             <Input
               placeholder="https://..."
-              value={isUploaded ? "" : value}
+              value={isUploaded || isLegacy ? "" : value}
               onChange={(e) => onChange(e.target.value)}
             />
           )}

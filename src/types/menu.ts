@@ -25,7 +25,11 @@ export type ProductDTO = {
 export type CategoryDTO = {
   id: string;
   name: string;
+  description: string | null;
+  imageUrl: string | null;
   products: ProductDTO[];
+  /** Alt kategoriler (tek seviye; alt kategorilerin children'i bostur) */
+  children: CategoryDTO[];
 };
 
 /** Sepetteki bir satirin secilen opsiyonlari (anlik kopya) */

@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   LogOut,
   MoreHorizontal,
+  Palette,
   Ban,
   QrCode,
   ReceiptText,
@@ -40,6 +41,7 @@ const PRIMARY = [
 /** "Diğer" menusundeki ekranlar */
 const SECONDARY = [
   { href: "/yonetim/cari", label: "Cari Müşteriler", icon: BookUser },
+  { href: "/yonetim/menu/gorunum", label: "Menü Görünümü", icon: Palette },
   { href: "/yonetim/iptaller", label: "İptaller", icon: Ban },
   { href: "/yonetim/personel", label: "Personel", icon: Users },
   { href: "/yonetim/qr", label: "QR Kodlar", icon: QrCode },
@@ -50,7 +52,12 @@ export function AdminShell({ children, userName }: { children: React.ReactNode; 
   const { soundOn, toggle: toggleSound } = useSoundEnabled();
   const [moreOpen, setMoreOpen] = React.useState(false);
 
-  const isActive = (href: string) => (href === "/yonetim" ? pathname === href : pathname.startsWith(href));
+  const isActive = (href: string) => {
+    if (href === "/yonetim") return pathname === href;
+    // "Menü" sekmesi, ayri bir girisi olan "Menü Görünümü" ekraninda yanmasin
+    if (href === "/yonetim/menu" && pathname.startsWith("/yonetim/menu/gorunum")) return false;
+    return pathname.startsWith(href);
+  };
   const secondaryActive = SECONDARY.some((item) => isActive(item.href));
 
   return (

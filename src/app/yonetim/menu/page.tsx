@@ -21,10 +21,21 @@ export default async function AdminMenuPage() {
     },
   });
 
-  const data: AdminCategory[] = categories.map((c) => ({
+  // Ust kategoriler sirayla, her birinin hemen ardindan kendi alt kategorileri
+  const tops = categories.filter((c) => !c.parentId);
+  const ordered = [
+    ...tops.flatMap((t) => [t, ...categories.filter((c) => c.parentId === t.id)]),
+    // Ust kategorisi bulunamayanlar (olmamali) kaybolmasin
+    ...categories.filter((c) => c.parentId && !tops.some((t) => t.id === c.parentId)),
+  ];
+
+  const data: AdminCategory[] = ordered.map((c) => ({
     id: c.id,
     name: c.name,
     sortOrder: c.sortOrder,
+    description: c.description,
+    imageUrl: c.imageUrl,
+    parentId: c.parentId,
     products: c.products.map((p) => ({
       id: p.id,
       name: p.name,

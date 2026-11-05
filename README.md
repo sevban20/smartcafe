@@ -352,7 +352,7 @@ server {
     listen 80;
     server_name kafem.com;
 
-    client_max_body_size 5M;   # ürün görseli yüklemesi (varsayılan 1M yetmez)
+    client_max_body_size 64M;  # görsel + açılış videosu yüklemesi (varsayılan 1M yetmez)
 
     location / {
         proxy_pass http://127.0.0.1:3010;   # .env'deki APP_PORT
@@ -500,7 +500,7 @@ server {
     server_name kafem.com;
 
     # Ürün görseli yüklemesi için (varsayılan 1M yetmez)
-    client_max_body_size 5M;
+    client_max_body_size 64M;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -557,7 +557,7 @@ Uygulama, `NEXTAUTH_SECRET` yoksa üretimde açılmayı reddeder (sessiz bozulma
 - [ ] Varsayılan şifreler değiştirildi (`/yonetim/personel`)
 - [ ] Cloudflare SSL "Full (strict)", HTML önbelleği kapalı
 - [ ] nginx `X-Real-IP` / `X-Forwarded-For` gönderiyor
-- [ ] `client_max_body_size 5M` ayarlandı (ürün görseli yüklemesi)
+- [ ] `client_max_body_size 64M` ayarlandı (görsel ve açılış videosu yüklemesi)
 - [ ] Gerçek telefonla uçtan uca tur: QR → sipariş → KDS → hazırla → teslim →
       hesap kapat → finansta göründüğünü doğrula
 - [ ] `/yonetim/qr` sayfasında site adresi gerçek alan adına çevrildi, QR'lar yeniden basıldı

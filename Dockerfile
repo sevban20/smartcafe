@@ -35,6 +35,8 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+# Yuklenen gorsel/videolar (docker-compose'da "uploads" volume'una baglanir)
+ENV UPLOAD_DIR=/app/uploads
 
 RUN groupadd --system --gid 1001 nodejs \
  && useradd --system --uid 1001 --gid nodejs nextjs
@@ -50,7 +52,9 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
-RUN chmod +x ./docker-entrypoint.sh && chown -R nextjs:nodejs /app
+# uploads klasoru imajda nextjs kullanicisina ait olusturulur; bos bir volume ilk
+# baglandiginda bu sahipligi devralir, uygulama dosya yazabilir.
+RUN mkdir -p /app/uploads && chmod +x ./docker-entrypoint.sh && chown -R nextjs:nodejs /app
 
 USER nextjs
 EXPOSE 3000
