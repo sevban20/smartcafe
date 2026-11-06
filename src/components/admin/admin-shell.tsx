@@ -27,7 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { NotificationControls, useSoundEnabled } from "@/components/kds/notification-controls";
+import { AudioUnlockBanner, NotificationControls, useOrderAlerts } from "@/components/kds/order-alerts";
 
 /** Mobil alt gezinmede gorunen ana ekranlar */
 const PRIMARY = [
@@ -49,7 +49,8 @@ const SECONDARY = [
 
 export function AdminShell({ children, userName }: { children: React.ReactNode; userName: string }) {
   const pathname = usePathname();
-  const { soundOn, toggle: toggleSound } = useSoundEnabled();
+  // Yonetici panelin hangi sayfasinda olursa olsun yeni siparisten haberdar olur
+  const { newCount, acknowledge } = useOrderAlerts();
   const [moreOpen, setMoreOpen] = React.useState(false);
 
   const isActive = (href: string) => {
@@ -89,7 +90,7 @@ export function AdminShell({ children, userName }: { children: React.ReactNode; 
           ))}
         </nav>
         <div className="mb-2 flex justify-center">
-          <NotificationControls soundOn={soundOn} onToggleSound={toggleSound} />
+          <NotificationControls />
         </div>
         <Button variant="ghost" className="justify-start" onClick={() => signOut({ callbackUrl: "/giris" })}>
           <LogOut className="h-4 w-4" />
@@ -98,6 +99,19 @@ export function AdminShell({ children, userName }: { children: React.ReactNode; 
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
+        <div className="sticky top-0 z-40">
+          <AudioUnlockBanner />
+          {newCount > 0 && (
+            <Link
+              href="/yonetim/siparisler?durum=aktif"
+              onClick={acknowledge}
+              className="flex w-full animate-pulse items-center justify-center gap-2 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+            >
+              <ReceiptText className="h-4 w-4" />
+              {newCount} yeni sipariş bekliyor — görmek için dokunun
+            </Link>
+          )}
+        </div>
         {/* Mobil ust bar */}
         <header className="sticky top-0 z-30 flex items-center justify-between border-b bg-background/95 px-4 py-3 backdrop-blur safe-top md:hidden">
           <div className="flex min-w-0 items-center gap-2">
@@ -110,7 +124,7 @@ export function AdminShell({ children, userName }: { children: React.ReactNode; 
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <NotificationControls soundOn={soundOn} onToggleSound={toggleSound} />
+            <NotificationControls />
             <Button variant="ghost" size="icon" onClick={() => signOut({ callbackUrl: "/giris" })} aria-label="Çıkış">
               <LogOut className="h-5 w-5" />
             </Button>

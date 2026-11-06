@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/guards";
 import { sendPushToStaff } from "@/lib/push";
+import { emitOrderCreated } from "@/lib/order-events";
 import { claimOnce, clientIp, rateLimit } from "@/lib/rate-limit";
 import type { OrderStatus, Prisma } from "@prisma/client";
 
@@ -146,6 +147,9 @@ export async function POST(req: Request) {
       },
       select: { id: true, orderNo: true, totalAmount: true, tableNo: true },
     });
+
+    // Acik siparis ekranlarina aninda haber ver (garson siparisi dahil: mutfak gormeli)
+    emitOrderCreated({ id: order.id, orderNo: order.orderNo, tableNo: order.tableNo, source: staff ? "PERSONEL" : "QR" });
 
     // Personele bildirim gonder — basarisiz olsa bile siparis akisi etkilenmez
     const itemCount = items.reduce((sum, i) => sum + i.quantity, 0);

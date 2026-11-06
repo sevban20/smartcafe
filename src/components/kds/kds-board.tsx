@@ -12,8 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { formatPrice, formatTime, timeAgo } from "@/lib/utils";
 import { CANCEL_REASON_LABEL, ORDER_STATUS_CLASS, ORDER_STATUS_LABEL } from "@/lib/constants";
 import { toast } from "sonner";
-import { flashTitle, playChime, stopFlashTitle, vibrate } from "@/lib/notify";
-import { NotificationControls, useSoundEnabled } from "@/components/kds/notification-controls";
+import { AudioUnlockBanner, NotificationControls, useOrderAlerts } from "@/components/kds/order-alerts";
 import { CancelDialog, type CancelTarget } from "@/components/kds/cancel-dialog";
 import type { CancelReason, OrderStatus } from "@prisma/client";
 
@@ -91,49 +90,25 @@ export function KdsBoard({
 
   const orders = React.useMemo(() => data?.orders ?? [], [data]);
 
-  // --- Yeni siparis uyarisi ---
-  const { soundOn, toggle: toggleSound } = useSoundEnabled();
-  const seenIds = React.useRef<Set<string> | null>(null);
-  const [newCount, setNewCount] = React.useState(0);
+  // --- Yeni siparis uyarisi (ses, titresim, baslik) ---
+  // Hangi sekme acik olursa olsun calisir; yeni siparis gelince liste de hemen yenilenir.
+  const { newCount, acknowledge } = useOrderAlerts({
+    onNew: () => queryClient.invalidateQueries({ queryKey: ["orders"] }),
+  });
   const [cancelTarget, setCancelTarget] = React.useState<CancelTarget | null>(null);
-
-  React.useEffect(() => {
-    if (!data) return;
-    const ids = new Set(orders.map((o) => o.id));
-
-    // Ilk yuklemede uyari verme, sadece mevcut durumu kaydet
-    if (seenIds.current === null) {
-      seenIds.current = ids;
-      return;
-    }
-
-    const fresh = orders.filter((o) => o.status === "PENDING" && !seenIds.current!.has(o.id));
-    seenIds.current = ids;
-    if (fresh.length === 0) return;
-
-    setNewCount((c) => c + fresh.length);
-    if (soundOn) playChime();
-    vibrate();
-    flashTitle(`(${fresh.length}) Yeni sipariş!`);
-    toast.info(
-      fresh.length === 1
-        ? `Yeni sipariş: Masa ${fresh[0].tableNo}`
-        : `${fresh.length} yeni sipariş geldi`
-    );
-  }, [data, orders, soundOn]);
 
   // Yetkisiz bir ekrana girmeye calisildiysa bir kez bilgi ver
   React.useEffect(() => {
     if (accessDenied) toast.error("Bu ekran yalnızca yöneticiler içindir.");
   }, [accessDenied]);
 
-  const clearNew = () => {
-    setNewCount(0);
-    stopFlashTitle();
-  };
+  const clearNew = acknowledge;
 
   return (
     <div className="min-h-[100dvh] bg-background pb-8">
+      <div className="sticky top-0 z-40">
+        <AudioUnlockBanner />
+      </div>
       <header className="sticky top-0 z-30 border-b bg-background/95 px-4 py-3 backdrop-blur safe-top">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -149,7 +124,7 @@ export function KdsBoard({
               )}
             </h1>
             <p className="text-xs text-muted-foreground">
-              {orders.length} sipariş · 10 saniyede bir yenilenir
+              {orders.length} sipariş · yeni siparişler anında gelir
             </p>
           </div>
           <div className="flex gap-2">
@@ -158,7 +133,7 @@ export function KdsBoard({
                 <Wallet className="h-4 w-4" />
               </Link>
             </Button>
-            <NotificationControls soundOn={soundOn} onToggleSound={toggleSound} />
+            <NotificationControls />
             <Button variant="outline" size="icon" onClick={() => refetch()} aria-label="Yenile">
               <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
             </Button>
